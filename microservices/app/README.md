@@ -1,154 +1,42 @@
-# python-flask
+# zapier-backup
 
-Boilerplate for a [Flask](http://flask.pocoo.org/) microservice.
+## What is it?
 
-## Add a python dependency
+Zapier backup is used to upload your files to Hausra server and trigger a backup for the same file on Google Drive.
+The drive link where all the backups get saved is: https://drive.google.com/open?id=1pYSTjW7pooVf3_kUXm_vj-cZVAVt9JSb
 
-In order use new python package in your app, you can just add it to `src/requirements.txt` and the git-push or docker build process will
-automatically install the package for you. If the `pip install` steps thorw some errors in demand of a system dependency,
-you can install those by adding it to the `Dockerfile` at the correct place.
+## How it works?
 
-```
-# src/requirements.txt:
+### Workflow
 
-flask
-requests
-gunicorn
+You follow the following steps to upload your file:
 
-# add your new packages one per each line
-```
+1. Login/Sign-Up at http://ui.akin49.hasura-app.io/
+2. You will be taken to upload page.
+3. Drag and drop the file you want to upload.
+4. Click the upload button, to upload the file and trigger backup.
 
-## Add a system dependency
+### Internal Implementation
 
-The base image used in this boilerplate is [python:3](https://hub.docker.com/_/python/) debian. Hence, all debian packages are available for installation.
-You can add a package by mentioning it in the `Dockerfile` among the existing `apt-get install` packages.
+1. When the user uploads the file, the file is sent to the backend.
+2. Various validations are performed like valid type of file etc.
+3. If all validations succeed, the backend pushes the file to Hasura infra.
+4. As soon as the the backend receives the response from Hasura about successful file upload, it triggers a backup to save the file to Google Drive using Zapier Zap.
 
-```dockerfile
-# Dockerfile
+## What does it use?
 
-FROM python:3
+1. [Hasura](https://hasura.io)
+2. [Zapier](https://zapier.com/)
 
-# install required debian packages
-# add any package that is required after `python-dev`, end the line with \
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python-dev \
-&& rm -rf /var/lib/apt/lists/*
 
-# install requirements
-COPY src/requirements.txt /tmp/requirements.txt
-RUN pip3 install -r /tmp/requirements.txt
+## How to build on top of this?
 
-# set /app as working directory
-WORKDIR /app
+The backend is written in Python using the Flask framework. The source code lies in `microservices/app/src` directory. `server.py` is where you want to start modifying the code.
 
-# copy current directory to /app
-COPY . /app
+Frontend uses React-JS and the source code lies in ``microservices/ui/app/src``
 
-# run gunicorn server
-# port is configured through the gunicorn config file
-CMD ["gunicorn", "--config", "./conf/gunicorn_config.py", "src:app"]
+## Support
 
-```
+If you happen to get stuck anywhere, please contact us at vikasprasad.prasad@gmail.com or amalchandrandev@gmail.com
 
-## Deploy your existing Flask app
-
-If you already have a Flask app and want to deploy it onto Hasura, read ahead:
-
-- Replace the contents of `src/` directory with your own app's python files.
-- Leave `k8s.yaml`, `Dockerfile` and `conf/` as it is.
-- Make sure there is already a `requirements.txt` file present inside the new `src/` indicating all your python dependencies (see [above](#add-a-python-dependency)).
-- If there are any system dependencies, add and configure them in `Dockerfile` (see [above](#add-a-system-dependency)).
-- If the Flask app is not called `app`, change the last line in `Dockerfile` reflect the same.
-  For example, if the app is called `backend`, the `CMD` line in `Dockerfile` will become:
-  ```dockerfile
-  CMD ["gunicorn", "--config", "./conf/gunicorn_config.py", "src:backend"]
-  ```
-
-## Debug
-
-If the push fails with an error `Updating deployment failed`, or the URL is showing `502 Bad Gateway`/`504 Gateway Timeout`,
-follow the instruction on the page and checkout the logs to see what is going wrong with the microservice:
-
-```bash
-# see status of microservice app
-$ hasura microservice list
-
-# get logs for app
-$ hasura microservice logs app
-```
-
-## Local development
-
-With Hasura's easy and fast git-push-to-deploy feature, you hardly need to run your code locally.
-However, you can follow the steps below in case you have to run the code in your local machine.
-
-### Without Docker
-
-It is recommended to use a [Virtual Environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/) for Python when you are running locally.
-Don't forget to add these directories to `.gitignore` to avoid committing packages to source code repo.
-
-```bash
-# setup pipenv or virtualenv and activate it (see link above)
-
-# go to app directory
-$ cd microservices/app
-
-# install dependencies
-$ pip install -r src/requirements.txt
-
-# Optional: set an environment variable to run Hasura examples 
-# otherwise, remove Hasura examples, 
-#   delete lines 5-8 from `src/__init__.py`
-#   remove file `src/hasura.py`
-$ export CLUSTER_NAME=[your-hasura-cluster-name]
-
-# run the development server (change bind address if it's already used)
-$ gunicorn --reload --bind "0.0.0.0:8080" src:app
-```
-
-Go to [http://localhost:8080](http://localhost:8080) using your browser to see the development version on the app.
-You can keep the gunicorn server running and when you edit source code and save the files, the server will be reload the new code automatically.
-Once you have made required changes, you can [deploy them to Hasura cluster](#deploy).
-
-### With Docker
-
-Install [Docker CE](https://docs.docker.com/engine/installation/) and cd to app directory:
-
-```bash
-# go to app directory
-$ cd microservices/app
-
-# build the docker image
-$ docker build -t hello-python-flask-app .
-
-# run the image with port bindings and CLUSTER_NAME environment variable
-# as mentioned above, remove hasura.py if you don't want to add CLUSTER_NAME
-$ docker run --rm -it -p 8080:8080 -e CLUSTER_NAME=[your-hasura-cluster-name] hello-python-flask-app
-
-# app will be available at `http://localhost:8080`
-# press Ctrl+C to stop the running container
-```
-
-For any change you make to the source code, you will have to stop the container, build the image again and run a new container.
-If you mount the current directory as a volume, you can live-reload your code changes:
-
-```bash
-# go to app directory
-$ cd microservices/app
-
-# build the docker image
-$ docker build -t hello-python-flask-app .
-
-# run the container
-$ docker run --rm -it -p 8080:8080 \
-             -e CLUSTER_NAME=[your-hasura-cluster-name] \
-             -v $(pwd):/app \
-             hello-python-flask-app \ 
-             gunicorn --reload --bind "0.0.0.0:8080" src:app
-             
-# app will be available at `http://localhost:8080`
-# press Ctrl+C to stop the running container
-```
-
-Now, any change you make to your source code will be immediately updated on the running app.
+You can create pull requests for any contribution.
